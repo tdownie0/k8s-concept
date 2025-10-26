@@ -1,0 +1,11 @@
+# Ignore application source directories (they have their own git repos)
+backend/vue-laravel/
+frontend/client-vue/
+
+# Environment files
+.env
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
