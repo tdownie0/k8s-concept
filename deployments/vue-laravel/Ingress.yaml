@@ -1,0 +1,18 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: laravel-php
+  namespace: demo-app
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`laravel-test.com`) && PathPrefix(`/api/php`)
+      middlewares:
+        - name: strip-api-prefixes
+      services:
+        - kind: Service
+          name: laravel-php
+          port: 9000
+          scheme: http

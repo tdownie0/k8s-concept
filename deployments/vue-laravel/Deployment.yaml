@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-php
+  namespace: demo-app
+  labels:
+    app: laravel-php
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: laravel-php
+  template:
+    metadata:
+      labels:
+        app: laravel-php
+    spec:
+      containers:
+        - name: laravel-php
+          image: rumsauce/test:php-fpm
+          env:
+            - name: PORT
+              value: "9000"
+          envFrom:
+            - secretRef:
+                name: laravel-php-database-url
+          ports:
+            - containerPort: 9000 
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 9000 
+          resources:
+            limits:
+              memory: "100Mi"
+            requests:
+              memory: "100Mi"
+              cpu: "50m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
