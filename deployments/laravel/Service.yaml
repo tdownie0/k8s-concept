@@ -1,12 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: laravel-php
+  name: laravel-web-service
   namespace: demo-app
+  labels:
+    app: laravel-php
 spec:
   selector:
     app: laravel-php
   ports:
     - protocol: TCP
-      port: 9000
-      targetPort: 9000
+      port: 80
+      targetPort: 80
+  type: ClusterIP

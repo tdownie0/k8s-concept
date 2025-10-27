@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: laravel-nginx-config
+  namespace: demo-app
+  labels:
+    app: laravel-php
+data:
+  nginx.conf: |
+    server {
+        listen 80;
+        server_name _;
+        # Assuming your Laravel public directory is /var/www/html/public
+        root /var/www/html/public;
+        index index.php index.html;
+
+        # Standard location block to handle pretty URLs (Laravel default)
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        # Pass PHP scripts to the fastcgi backend
+        location ~ \.php$ {
+            # Try to serve the file, if not found, return 404
+            try_files $uri =404;
+
+            # The key is to pass the request to the local PHP-FPM port
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+
+            # Include the default fastcgi parameters
+            include fastcgi_params;
+            
+            # Set required FastCGI parameters
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+
+            # Recommended setting to avoid buffering issues
+            fastcgi_buffers 16 16k;
+            fastcgi_buffer_size 32k;
+        }
+
+        # Hide dotfiles
+        location ~ /\. {
+            deny all;
+        }
+    }

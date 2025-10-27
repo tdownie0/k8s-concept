@@ -8,11 +8,12 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: Host(`laravel-test.com`) && PathPrefix(`/api/php`)
+      match: Host(`localhost`) && PathPrefix(`/api/php`)
       middlewares:
         - name: strip-api-prefixes
+          namespace: demo-app
       services:
         - kind: Service
-          name: laravel-php
-          port: 9000
+          name: laravel-web-service 
+          port: 80
           scheme: http

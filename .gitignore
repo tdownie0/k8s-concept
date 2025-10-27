@@ -1,6 +1,6 @@
 # Ignore application source directories (they have their own git repos)
-backend/vue-laravel/
-frontend/client-vue/
+backend/*
+frontend/*
 
 # Environment files
 .env

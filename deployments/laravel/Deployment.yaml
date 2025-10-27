@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-php
+  namespace: demo-app
+  labels:
+    app: laravel-php
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: laravel-php
+  template:
+    metadata:
+      labels:
+        app: laravel-php
+    spec:
+      # --- VOLUMES for sharing code and config ---
+      volumes:
+        - name: app-code
+          emptyDir: {}
+        - name: nginx-config
+          configMap:
+            name: laravel-nginx-config
+            
+      # --- INIT CONTAINER: Copies application code to the shared volume ---
+      initContainers:
+        - name: copy-app-code
+          # IMPORTANT: Uses the same PHP image which contains the source code
+          image: rumsauce/test:php-fpm 
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Copy all files from the image's code directory (/var/www/html) 
+              # to the shared volume mount point (/app-shared-code).
+              cp -R /var/www/html/. /app-shared-code/ ; 
+              # Correct permissions for non-root users (like www-data)
+              chown -R www-data:www-data /app-shared-code
+          volumeMounts:
+            - name: app-code
+              mountPath: /app-shared-code # Temporary mount point for the copy operation
+              
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+          
+      containers:
+        # 1. NGINX CONTAINER (Reads code from shared volume)
+        - name: laravel-nginx
+          image: nginx:stable-alpine
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: app-code
+              mountPath: /var/www/html # Nginx reads code from here
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: nginx.conf
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+
+        # 2. PHP-FPM CONTAINER (Reads/Writes code from shared volume)
+        - name: laravel-php
+          image: rumsauce/test:php-fpm
+          env:
+            - name: PORT
+              value: "9000"
+          envFrom:
+            - secretRef:
+                name: laravel-php-database-url
+          ports:
+            - containerPort: 9000
+              protocol: TCP
+          volumeMounts:
+            - name: app-code
+              mountPath: /var/www/html # PHP-FPM runs/writes code here
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
