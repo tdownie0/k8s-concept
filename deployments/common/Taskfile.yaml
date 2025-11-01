@@ -22,4 +22,21 @@ tasks:
     desc: "Deploy PostgreSQL Database"
     cmds:
       - helm repo add bitnami https://charts.bitnami.com/bitnami
-      - helm upgrade --install postgresql -n demo-app bitnami/postgresql --version 18.1.1
+      - "helm upgrade --install postgresql \
+          -n postgres bitnami/postgresql \
+          --set auth.postgresPassword=foobarbaz \
+          --version 18.1.1 \
+          --create-namespace"
+
+  get-postgres-password:
+    desc: "Get PostgreSQL password"
+    cmds:
+      - "kubectl get secret --namespace demo-app postgresql -o jsonpath=\"{.data.postgres-password}\" | base64 --decode"
+
+  apply-all:
+    desc: "Apply all Kubernetes resources"
+    cmds:
+      - task: apply-namespace
+      - task: deploy-traefik
+      - task: apply-traefik-middleware
+      - task: deploy-postgres
