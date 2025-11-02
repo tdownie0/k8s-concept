@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-vue
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: client
+          image: rumsauce/test:client-vue-dev
+          env:
+            - name: NODE_ENV
+              value: "production"

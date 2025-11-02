@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-php
+  namespace: demo-app
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: laravel-php
+          image: rumsauce/test:php-fpm
+          env:
+          - name: APP_ENV
+            value: "local"
+          - name: APP_DEBUG
+            value: "true"
+          - name: LOG_LEVEL
+            value: "debug"
