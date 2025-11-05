@@ -27,11 +27,61 @@ tasks:
           --set auth.postgresPassword=foobarbaz \
           --version 18.1.1 \
           --create-namespace"
-
-  get-postgres-password:
-    desc: "Get PostgreSQL password"
+          
+  deploy-prometheus-stack:
+    desc: "Deploy Prometheus Stack using Helm"
     cmds:
-      - "kubectl get secret --namespace demo-app postgresql -o jsonpath=\"{.data.postgres-password}\" | base64 --decode"
+      - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      - helm repo add grafana https://grafana.github.io/helm-charts
+      - "helm upgrade --install prometheus-stack \
+          -n monitoring prometheus-community/kube-prometheus-stack \
+          --version 79.1.1 \
+          --create-namespace"
+
+  get-grafana-admin-password:
+    desc: "Get Grafana admin password"
+    cmds:
+      - |
+        kubectl get secret -n monitoring prometheus-stack-grafana \
+          -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+
+  deploy-loki:
+    desc: "Deploy Loki for logging"
+    cmds:
+      - helm repo add grafana https://grafana.github.io/helm-charts
+      - |
+        helm upgrade --install loki grafana/loki \
+          -n monitoring \
+          --version 5.35.0 \
+          --set promtail.enabled=true \
+          --set loki.persistence.enabled=false \
+
+  deploy-tempo:
+    desc: "Deploy Tempo for tracing"
+    cmds:
+      - helm repo add grafana https://grafana.github.io/helm-charts
+      - "helm upgrade --install tempo grafana/tempo \
+          -n monitoring \
+          --version 1.24.0 \
+          --create-namespace \
+          --set tempo.metrics.enabled=true \
+          --set storage.trace.backend=mem"
+
+  deploy-opentelemetry-collector:
+    desc: "Deploy OpenTelemetry Collector"
+    cmds:
+      - helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+      - |
+        helm upgrade --install otel-collector open-telemetry/opentelemetry-collector \
+          -n monitoring \
+          --version 0.138.1 \
+          --create-namespace \
+          --set mode=deployment \
+          --set config.receivers.otlp.protocols.http.enabled=true \
+          --set config.receivers.otlp.protocols.grpc.enabled=true \
+          --set config.exporters.otlp.endpoint="http://tempo.monitoring.svc.cluster.local:4317" \
+          --set config.service.pipelines.traces.receivers[0]=otlp \
+          --set config.service.pipelines.traces.exporters[0]=otlp
 
   apply-all:
     desc: "Apply all Kubernetes resources"
@@ -40,3 +90,6 @@ tasks:
       - task: deploy-traefik
       - task: apply-traefik-middleware
       - task: deploy-postgres
+      - task: deploy-prometheus-stack
+      - task: deploy-loki
+      - task: deploy-tempo
