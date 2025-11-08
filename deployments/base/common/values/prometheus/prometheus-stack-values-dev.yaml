@@ -1,0 +1,22 @@
+grafana:
+  adminPassword: admin  # Simple for dev
+  persistence:
+    enabled: false  # No persistence in dev
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+prometheus:
+  prometheusSpec:
+    retention: 7d  # Short retention
+    storageSpec: {}  # No persistent storage
+    
+    resources:
+      limits:
+        cpu: 1
+        memory: 2Gi
+
+alertmanager:
+  enabled: false  # No alerts in dev

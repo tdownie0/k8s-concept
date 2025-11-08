@@ -1,0 +1,132 @@
+alloy:
+  configMap:
+    content: |
+      // Same config as dev, but with production endpoints
+      discovery.kubernetes "pods" {
+        role = "pod"
+        namespaces {
+          own_namespace = false
+        }
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+        
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.process.add_metadata.receiver]
+      }
+
+      loki.process "add_metadata" {
+        forward_to = [loki.write.local.receiver]
+        
+        stage.json {
+          expressions = {
+            level = "level",
+            msg   = "message",
+          }
+        }
+        
+        stage.labels {
+          values = {
+            level = "",
+          }
+        }
+      }
+
+      loki.write "local" {
+        endpoint {
+          url = "http://loki-gateway/loki/api/v1/push"
+          
+          // Add batching for production
+          batch_wait = "1s"
+          batch_size = 1048576  // 1MB
+        }
+      }
+
+      // OpenTelemetry receivers for application instrumentation
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+
+        output {
+          traces  = [otelcol.processor.batch.default.input]
+          metrics = [otelcol.processor.batch.default.input]
+          logs    = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      otelcol.processor.batch "default" {
+        timeout = "10s"
+        send_batch_size = 1024
+
+        output {
+          traces  = [otelcol.exporter.otlp.tempo.input]
+          metrics = [otelcol.exporter.prometheus.default.input]
+          logs    = [otelcol.exporter.loki.default.input]
+        }
+      }
+
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo-distributor:4317"
+          tls {
+            insecure = true
+          }
+        }
+      }
+
+      otelcol.exporter.prometheus "default" {
+        forward_to = [prometheus.remote_write.local.receiver]
+      }
+
+      prometheus.remote_write "local" {
+        endpoint {
+          url = "http://prometheus-stack-kube-prom-prometheus:9090/api/v1/write"
+        }
+      }
+
+      otelcol.exporter.loki "default" {
+        forward_to = [loki.write.local.receiver]
+      }
+
+      // Prometheus scraping for ServiceMonitors
+      prometheus.operator.servicemonitors "default" {
+        forward_to = [prometheus.remote_write.local.receiver]
+      }
+
+controller:
+  type: daemonset
+
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi

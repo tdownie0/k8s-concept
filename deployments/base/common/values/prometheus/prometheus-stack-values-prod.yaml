@@ -1,0 +1,38 @@
+grafana:
+  adminPassword: ""  # Use secret manager
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 20Gi
+  
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+prometheus:
+  prometheusSpec:
+    retention: 90d  # Long retention
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 100Gi
+    
+    resources:
+      limits:
+        cpu: 4
+        memory: 8Gi
+
+alertmanager:
+  enabled: true  # Alerts in prod
+  config:
+    route:
+      receiver: 'slack'
+    receivers:
+    - name: 'slack'
+      slack_configs:
+      - api_url: 'WEBHOOK_URL'

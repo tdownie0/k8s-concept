@@ -1,5 +1,8 @@
 version: "3"
 
+vars:
+  ENV: '{{.ENV | default "dev"}}'
+
 tasks:
   apply-namespace:
     desc: "Apply Kubernetes Namespace"
@@ -28,60 +31,101 @@ tasks:
           --version 18.1.1 \
           --create-namespace"
           
-  deploy-prometheus-stack:
-    desc: "Deploy Prometheus Stack using Helm"
+  deploy-observability:
+    desc: "Deploy complete observability stack (ENV=dev|staging|prod)"
+    cmds:
+      - task: add-helm-repos
+      - task: deploy-prometheus-stack
+      - task: deploy-loki
+      - task: deploy-tempo
+      - task: deploy-alloy
+      - |
+        echo "✅ Observability stack deployed successfully for {{.ENV}} environment!"
+        echo "📊 Access Grafana with: task port-forward-grafana"
+        echo "🔑 Get admin password with: task get-grafana-admin-password"
+
+  add-helm-repos:
+    desc: "Add all required Helm repositories"
     cmds:
       - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
       - helm repo add grafana https://grafana.github.io/helm-charts
-      - "helm upgrade --install prometheus-stack \
-          -n monitoring prometheus-community/kube-prometheus-stack \
+      - helm repo update
+
+  deploy-prometheus-stack:
+    desc: "Deploy Prometheus Stack with Grafana"
+    cmds:
+      - |
+        helm upgrade --install prometheus-stack \
+          prometheus-community/kube-prometheus-stack \
+          -n monitoring \
           --version 79.1.1 \
-          --create-namespace"
+          --create-namespace \
+          -f values/prometheus/prometheus-stack-values-{{.ENV}}.yaml
+      - echo "✅ Prometheus Stack deployed ({{.ENV}})"
+
+  deploy-loki:
+    desc: "Deploy Loki for log aggregation"
+    cmds:
+      - |
+        helm upgrade --install loki grafana/loki \
+          -n monitoring \
+          --version 6.22.0 \
+          --create-namespace \
+          -f values/loki/loki-values-{{.ENV}}.yaml
+      - echo "✅ Loki deployed ({{.ENV}})"
+
+  deploy-tempo:
+    desc: "Deploy Tempo for distributed tracing"
+    cmds:
+      - |
+        helm upgrade --install tempo grafana/tempo \
+          -n monitoring \
+          --version 1.24.0 \
+          --create-namespace \
+          -f values/tempo/tempo-values-{{.ENV}}.yaml
+      - echo "✅ Tempo deployed ({{.ENV}})"
+
+  deploy-alloy:
+    desc: "Deploy Grafana Alloy for unified observability collection"
+    cmds:
+      - |
+        helm upgrade --install alloy grafana/alloy \
+          -n monitoring \
+          --create-namespace \
+          -f values/alloy/alloy-values-{{.ENV}}.yaml
+      - echo "✅ Grafana Alloy deployed ({{.ENV}})"
+
+  port-forward-grafana:
+    desc: "Port forward Grafana service"
+    cmds:
+      - kubectl port-forward -n monitoring svc/prometheus-stack-grafana 3000:80
 
   get-grafana-admin-password:
     desc: "Get Grafana admin password"
     cmds:
       - |
+        echo "Grafana Admin Password:"
         kubectl get secret -n monitoring prometheus-stack-grafana \
-          -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+          -o jsonpath="{.data.admin-password}" | base64 --decode
+        echo
 
-  deploy-loki:
-    desc: "Deploy Loki for logging"
+  # Cleanup tasks
+  uninstall-observability:
+    desc: "Uninstall all observability components"
+    prompt: "This will remove all observability components. Continue?"
     cmds:
-      - helm repo add grafana https://grafana.github.io/helm-charts
-      - |
-        helm upgrade --install loki grafana/loki \
-          -n monitoring \
-          --version 5.35.0 \
-          --set promtail.enabled=true \
-          --set loki.persistence.enabled=false \
+      - helm uninstall prometheus-stack -n monitoring || true
+      - helm uninstall loki -n monitoring || true
+      - helm uninstall tempo -n monitoring || true
+      - helm uninstall alloy -n monitoring || true
+      - kubectl delete namespace monitoring || true
+      - echo "✅ Observability stack uninstalled"
 
-  deploy-tempo:
-    desc: "Deploy Tempo for tracing"
+  restart-alloy:
+    desc: "Restart Grafana Alloy"
     cmds:
-      - helm repo add grafana https://grafana.github.io/helm-charts
-      - "helm upgrade --install tempo grafana/tempo \
-          -n monitoring \
-          --version 1.24.0 \
-          --create-namespace \
-          --set tempo.metrics.enabled=true \
-          --set storage.trace.backend=mem"
-
-  deploy-opentelemetry-collector:
-    desc: "Deploy OpenTelemetry Collector"
-    cmds:
-      - helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
-      - |
-        helm upgrade --install otel-collector open-telemetry/opentelemetry-collector \
-          -n monitoring \
-          --version 0.138.1 \
-          --create-namespace \
-          --set mode=deployment \
-          --set config.receivers.otlp.protocols.http.enabled=true \
-          --set config.receivers.otlp.protocols.grpc.enabled=true \
-          --set config.exporters.otlp.endpoint="http://tempo.monitoring.svc.cluster.local:4317" \
-          --set config.service.pipelines.traces.receivers[0]=otlp \
-          --set config.service.pipelines.traces.exporters[0]=otlp
+      - kubectl rollout restart daemonset/alloy -n monitoring
+      - echo "✅ Alloy restarted"
 
   apply-all:
     desc: "Apply all Kubernetes resources"
@@ -90,6 +134,4 @@ tasks:
       - task: deploy-traefik
       - task: apply-traefik-middleware
       - task: deploy-postgres
-      - task: deploy-prometheus-stack
-      - task: deploy-loki
-      - task: deploy-tempo
+      - task: deploy-observability

@@ -1,0 +1,28 @@
+tempo:
+  storage:
+    trace:
+      backend: s3  # Or local with persistence
+      s3:
+        bucket: tempo-traces
+        endpoint: s3.amazonaws.com
+        region: us-east-1
+  metricsGenerator:
+    enabled: true
+    resources:
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+persistence:
+  enabled: true
+  size: 50Gi
+
+resources:
+  limits:
+    cpu: 2
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+replicas: 3  # High availability
